@@ -1,26 +1,14 @@
 # SPEC-008 — Pagamentos Service: Consumer e Gateway
 
----
+> Depende de: [spec007](spec007-pagamentos-models.md) (Pagamento criado)
 
-## Imagens Docker
+## O que essa spec faz
 
-| Serviço    | Imagem                    | Versão  |
-|------------|---------------------------|---------|
-| PostgreSQL | `postgres`                | `16`    |
-| Kafka      | `confluentinc/cp-kafka`   | `7.6.0` |
-| Zookeeper  | `confluentinc/cp-zookeeper` | `7.6.0` |
-
-> Infraestrutura completa em [spec001](spec001-infraestrutura-docker.md).
-
----
-
-## Objetivo
-
-Implementar no **Pagamentos Service**:
-
-1. `ReservaCriadaConsumer` — consome `reserva.criada`, processa o pagamento via gateway e persiste o resultado
-2. `GatewayPagamento` — interface do gateway externo
-3. `MockGatewayPagamento` — implementação mock para desenvolvimento/testes
+Implementa no **pagamentos-service**:
+1. `ReservaCriadaConsumer` — consome `reserva.criada` e dispara o processamento
+2. `GatewayPagamento` — interface que representa um gateway externo de pagamento
+3. `MockGatewayPagamento` — implementação mock (aprova 80% das transações)
+4. `PagamentoService` — orquestra tudo com controle de idempotência
 
 ---
 
@@ -28,53 +16,54 @@ Implementar no **Pagamentos Service**:
 
 ```
 pagamentos-service/src/main/java/com/hotel/pagamentos/
-├── kafka/
-│   └── consumer/
-│       └── ReservaCriadaConsumer.java
+├── kafka/consumer/
+│   └── ReservaCriadaConsumer.java
 ├── gateway/
 │   ├── GatewayPagamento.java
 │   └── MockGatewayPagamento.java
 ├── service/
 │   └── PagamentoService.java
 └── event/
-    ├── ReservaCriadaEvent.java
-    └── PagamentoResultadoEvent.java
+    ├── ReservaCriadaEvent.java      ← cópia local (sem JAR compartilhado)
+    └── PagamentoResultadoEvent.java ← cópia local
 ```
 
 ---
 
-## Implementação
-
-### ReservaCriadaEvent.java (cópia local do evento do Hotel Core)
+## Eventos (cópias locais)
 
 ```java
-// O Pagamentos Service mantém sua própria cópia do evento — sem dependência de JAR compartilhado
+// Consumido de reserva.criada
 public record ReservaCriadaEvent(
-    Long reservaId,
-    Long hospedeId,
-    Long imovelId,
-    LocalDate dataCheckIn,
-    LocalDate dataCheckOut,
+    Long reservaId, Long hospedeId, Long imovelId,
+    LocalDate dataCheckIn, LocalDate dataCheckOut,
     BigDecimal valorTotal
+) {}
+
+// Publicado em pagamento.resultado
+public record PagamentoResultadoEvent(
+    Long reservaId, Long pagamentoId,
+    String status,  // APROVADO | RECUSADO | ESTORNADO
+    String motivo
 ) {}
 ```
 
+> Cada serviço tem sua própria cópia dos eventos — sem dependência de JAR compartilhado.
+
 ---
 
-### GatewayPagamento.java (interface)
+## GatewayPagamento.java (interface)
 
 ```java
 public interface GatewayPagamento {
-
     ResultadoGateway processar(Long reservaId, BigDecimal valor);
-
     record ResultadoGateway(boolean aprovado, String motivo) {}
 }
 ```
 
 ---
 
-### MockGatewayPagamento.java
+## MockGatewayPagamento.java
 
 ```java
 @Component
@@ -83,22 +72,18 @@ public class MockGatewayPagamento implements GatewayPagamento {
 
     private static final Logger log = LoggerFactory.getLogger(MockGatewayPagamento.class);
 
-    // aprova 80% das transações — simula comportamento realista
     @Override
     public ResultadoGateway processar(Long reservaId, BigDecimal valor) {
         log.info("Gateway mock processando reservaId={} valor={}", reservaId, valor);
-
-        boolean aprovado = Math.random() > 0.2;
-        String motivo = aprovado ? null : "Limite insuficiente (mock)";
-
-        return new ResultadoGateway(aprovado, motivo);
+        boolean aprovado = Math.random() > 0.2; // 80% de aprovação
+        return new ResultadoGateway(aprovado, aprovado ? null : "Limite insuficiente (mock)");
     }
 }
 ```
 
 ---
 
-### PagamentoService.java
+## PagamentoService.java
 
 ```java
 @Service
@@ -112,7 +97,7 @@ public class PagamentoService {
     private final PagamentoResultadoProducer resultadoProducer;
 
     public void processar(ReservaCriadaEvent evento) {
-        // idempotência: mensagem duplicada do Kafka é ignorada
+        // se já existe um pagamento para esta reserva, ignora (idempotência)
         if (pagamentoRepository.existsByReservaId(evento.reservaId())) {
             log.warn("Pagamento já processado para reservaId={}, ignorando", evento.reservaId());
             return;
@@ -124,20 +109,13 @@ public class PagamentoService {
         pagamento.setStatus(StatusPagamento.PENDENTE);
         pagamentoRepository.save(pagamento);
 
-        GatewayPagamento.ResultadoGateway resultado =
-            gateway.processar(evento.reservaId(), evento.valorTotal());
+        GatewayPagamento.ResultadoGateway resultado = gateway.processar(evento.reservaId(), evento.valorTotal());
 
-        if (resultado.aprovado()) {
-            pagamento.setStatus(StatusPagamento.APROVADO);
-        } else {
-            pagamento.setStatus(StatusPagamento.RECUSADO);
-            pagamento.setMotivo(resultado.motivo());
-        }
-
+        pagamento.setStatus(resultado.aprovado() ? StatusPagamento.APROVADO : StatusPagamento.RECUSADO);
+        if (!resultado.aprovado()) pagamento.setMotivo(resultado.motivo());
         pagamentoRepository.save(pagamento);
 
-        // publica resultado para o Hotel Core — spec009
-        resultadoProducer.publicar(pagamento);
+        resultadoProducer.publicar(pagamento); // ver spec009
 
         log.info("Pagamento processado reservaId={} status={}", evento.reservaId(), pagamento.getStatus());
     }
@@ -146,7 +124,7 @@ public class PagamentoService {
 
 ---
 
-### ReservaCriadaConsumer.java
+## ReservaCriadaConsumer.java
 
 ```java
 @Component
@@ -177,17 +155,15 @@ public class ReservaCriadaConsumer {
 ## Fluxo de idempotência
 
 ```
-Kafka entrega reserva.criada (pode ser redelivery)
+Kafka entrega reserva.criada (pode ser reentrega)
         │
-        ▼
 PagamentoService.processar()
         │
-        ├── existsByReservaId() → TRUE  → ignora, retorna
-        │
-        └── existsByReservaId() → FALSE
+        ├── existsByReservaId() = true  → ignora, retorna
+        └── existsByReservaId() = false
                 │
                 ├── Salva Pagamento (PENDENTE)
-                ├── Chama gateway
+                ├── Chama gateway mock
                 ├── Atualiza status (APROVADO / RECUSADO)
                 └── Publica pagamento.resultado
 ```

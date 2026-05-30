@@ -1,29 +1,18 @@
 # SPEC-003 — Hotel Core: REST Endpoints
 
----
+> Depende de: [spec002](spec002-hotelcore-models.md) (models criados)
 
-## Imagens Docker
+## O que essa spec faz
 
-| Serviço    | Imagem           | Versão  |
-|------------|------------------|---------|
-| PostgreSQL | `postgres`       | `16`    |
-| Kafka      | `confluentinc/cp-kafka` | `7.6.0` |
+Implementa os endpoints REST do **hotel-core**.
 
-> Infraestrutura completa em [spec001](spec001-infraestrutura-docker.md).
-
----
-
-## Objetivo
-
-Implementar os endpoints REST do **Hotel Core**:
-
-| Método | Rota                      | Descrição                        |
-|--------|---------------------------|----------------------------------|
-| POST   | `/api/hospedes`           | Cadastrar hóspede                |
-| GET    | `/api/hospedes/{id}`      | Buscar hóspede por ID            |
-| POST   | `/api/reservas`           | Criar reserva (dispara Kafka)    |
-| GET    | `/api/reservas/{id}`      | Buscar reserva por ID            |
-| GET    | `/api/reservas`           | Listar reservas por hóspede      |
+| Método | Rota | Ação |
+|---|---|---|
+| POST | `/api/hospedes` | Cadastrar hóspede |
+| GET | `/api/hospedes/{id}` | Buscar hóspede |
+| POST | `/api/reservas` | Criar reserva (publica no Kafka) |
+| GET | `/api/reservas/{id}` | Buscar reserva |
+| GET | `/api/reservas?hospedeId=X` | Listar reservas do hóspede |
 
 ---
 
@@ -50,9 +39,9 @@ hotel-core/src/main/java/com/hotel/core/
 
 ---
 
-## Implementação
+## DTOs
 
-### CriarReservaRequest.java (DTO)
+### CriarReservaRequest.java
 
 ```java
 public record CriarReservaRequest(
@@ -64,9 +53,7 @@ public record CriarReservaRequest(
 ) {}
 ```
 
----
-
-### ReservaResponse.java (DTO)
+### ReservaResponse.java
 
 ```java
 public record ReservaResponse(
@@ -86,14 +73,13 @@ public record ReservaResponse(
 
 ---
 
-### ReservaRepository.java
+## ReservaRepository.java
 
 ```java
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     List<Reserva> findByHospedeId(Long hospedeId);
 
-    // verifica conflito de datas para o mesmo imóvel
     @Query("""
         SELECT COUNT(r) > 0 FROM Reserva r
         WHERE r.imovel.id = :imovelId
@@ -107,7 +93,7 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
 ---
 
-### ReservaService.java
+## ReservaService.java
 
 ```java
 @Service
@@ -126,16 +112,11 @@ public class ReservaService {
         Imovel imovel = imovelRepository.findById(request.imovelId())
             .orElseThrow(() -> new EntityNotFoundException("Imóvel não encontrado"));
 
-        if (!imovel.getDisponivel()) {
+        if (!imovel.getDisponivel())
             throw new IllegalStateException("Imóvel indisponível");
-        }
 
-        boolean conflito = reservaRepository.existeConflitoDeDatas(
-            imovel.getId(), request.dataCheckIn(), request.dataCheckOut()
-        );
-        if (conflito) {
+        if (reservaRepository.existeConflitoDeDatas(imovel.getId(), request.dataCheckIn(), request.dataCheckOut()))
             throw new IllegalStateException("Imóvel já reservado para o período solicitado");
-        }
 
         long noites = ChronoUnit.DAYS.between(request.dataCheckIn(), request.dataCheckOut());
         BigDecimal valorTotal = imovel.getPrecoPorNoite().multiply(BigDecimal.valueOf(noites));
@@ -148,11 +129,9 @@ public class ReservaService {
         reserva.setNumeroHospedes(request.numeroHospedes());
         reserva.setValorTotal(valorTotal);
         reserva.setStatus(StatusReserva.PENDENTE);
-
         reservaRepository.save(reserva);
 
-        // publica evento no Kafka — spec005
-        reservaProducer.publicar(reserva);
+        reservaProducer.publicar(reserva); // ver spec005
 
         return toResponse(reserva);
     }
@@ -176,6 +155,8 @@ public class ReservaService {
 ```
 
 ---
+
+## Controllers
 
 ### ReservaController.java
 
@@ -204,8 +185,6 @@ public class ReservaController {
     }
 }
 ```
-
----
 
 ### HospedeController.java
 
@@ -238,7 +217,7 @@ public class HospedeController {
 
 ---
 
-### GlobalExceptionHandler.java
+## GlobalExceptionHandler.java
 
 ```java
 @RestControllerAdvice
@@ -270,24 +249,18 @@ public class GlobalExceptionHandler {
 
 ---
 
-## Exemplo de requisição
+## Exemplos de uso (curl)
 
 ```bash
 # Criar hóspede
 curl -X POST http://localhost:8080/api/hospedes \
   -H "Content-Type: application/json" \
-  -d '{"nome": "João Silva", "email": "joao@email.com", "telefone": "11999999999", "cpf": "123.456.789-00"}'
+  -d '{"nome":"João Silva","email":"joao@email.com","telefone":"11999999999","cpf":"123.456.789-00"}'
 
-# Criar reserva (dispara fluxo Kafka completo)
+# Criar reserva (dispara fluxo Kafka)
 curl -X POST http://localhost:8080/api/reservas \
   -H "Content-Type: application/json" \
-  -d '{
-    "hospedeId": 1,
-    "imovelId": 1,
-    "dataCheckIn": "2025-08-10",
-    "dataCheckOut": "2025-08-15",
-    "numeroHospedes": 2
-  }'
+  -d '{"hospedeId":1,"imovelId":1,"dataCheckIn":"2025-08-10","dataCheckOut":"2025-08-15","numeroHospedes":2}'
 
 # Consultar reserva
 curl http://localhost:8080/api/reservas/1
@@ -295,4 +268,4 @@ curl http://localhost:8080/api/reservas/1
 
 ---
 
-**Próxima spec:** [spec004 — Hotel Core: Kafka Config e Eventos](spec004-hotelcore-kafka-config.md)
+**Próxima spec:** [spec004 — Hotel Core: Kafka Config](spec004-hotelcore-kafka-config.md)

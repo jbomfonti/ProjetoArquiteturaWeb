@@ -1,22 +1,10 @@
 # SPEC-006 — Hotel Core: Kafka Consumer
 
----
+> Depende de: [spec004](spec004-hotelcore-kafka-config.md) (KafkaConfig)
 
-## Imagens Docker
+## O que essa spec faz
 
-| Serviço    | Imagem                    | Versão  |
-|------------|---------------------------|---------|
-| PostgreSQL | `postgres`                | `16`    |
-| Kafka      | `confluentinc/cp-kafka`   | `7.6.0` |
-| Zookeeper  | `confluentinc/cp-zookeeper` | `7.6.0` |
-
-> Infraestrutura completa em [spec001](spec001-infraestrutura-docker.md).
-
----
-
-## Objetivo
-
-Implementar o **consumer Kafka** do Hotel Core que escuta o tópico `pagamento.resultado` e atualiza o status da reserva de acordo com o resultado do pagamento.
+Escuta o tópico `pagamento.resultado` e atualiza o status da reserva conforme o resultado do pagamento.
 
 ---
 
@@ -31,9 +19,7 @@ hotel-core/src/main/java/com/hotel/core/
 
 ---
 
-## Implementação
-
-### PagamentoResultadoConsumer.java
+## PagamentoResultadoConsumer.java
 
 ```java
 @Component
@@ -57,9 +43,7 @@ public class PagamentoResultadoConsumer {
         log.info("pagamento.resultado recebido reservaId={} status={}", evento.reservaId(), evento.status());
 
         Reserva reserva = reservaRepository.findById(evento.reservaId())
-            .orElseThrow(() -> new EntityNotFoundException(
-                "Reserva não encontrada: " + evento.reservaId()
-            ));
+            .orElseThrow(() -> new EntityNotFoundException("Reserva não encontrada: " + evento.reservaId()));
 
         StatusReserva novoStatus = switch (evento.status()) {
             case "APROVADO"  -> StatusReserva.CONFIRMADA;
@@ -81,20 +65,12 @@ public class PagamentoResultadoConsumer {
 ## Comportamento por status recebido
 
 | `evento.status` | `reserva.status` resultante |
-|-----------------|-----------------------------|
-| `APROVADO`      | `CONFIRMADA`                |
-| `RECUSADO`      | `CANCELADA`                 |
-| `ESTORNADO`     | `CANCELADA`                 |
+|---|---|
+| `APROVADO` | `CONFIRMADA` |
+| `RECUSADO` | `CANCELADA` |
+| `ESTORNADO` | `CANCELADA` |
 
----
-
-## Retry e Dead Letter Topic
-
-Configurado em `KafkaConfig` ([spec004](spec004-hotelcore-kafka-config.md)):
-
-- **3 tentativas** com intervalo de **2 segundos**
-- Após esgotar, a mensagem vai para `pagamento.resultado.DLT`
-- O DLT pode ser monitorado pelo Kafka UI em `http://localhost:8090`
+**Retry:** 3 tentativas com 2s de intervalo. Após esgotar, a mensagem vai para `pagamento.resultado.DLT` (visível no Kafka UI em http://localhost:8090).
 
 ---
 
@@ -103,22 +79,18 @@ Configurado em `KafkaConfig` ([spec004](spec004-hotelcore-kafka-config.md)):
 ```
 POST /api/reservas
         │
-        ▼
   ReservaService.criarReserva()
         │
         ├── Salva Reserva (PENDENTE)
-        │
         └── ReservaProducer ──► reserva.criada
                                         │
                               [Pagamentos Service]
                                         │
-                              pagamento.resultado ◄── publica
+                              pagamento.resultado ◄── publica resultado
                                         │
-                                        ▼
                        PagamentoResultadoConsumer
                                         │
-                              Atualiza Reserva
-                              → CONFIRMADA ou CANCELADA
+                              Atualiza → CONFIRMADA ou CANCELADA
 ```
 
 ---

@@ -1,23 +1,11 @@
-# SPEC-007 — Pagamentos Service: Models e Banco de Dados
+# SPEC-007 — Pagamentos Service: Models e Banco
 
----
+> Depende de: [spec001](spec001-infraestrutura-docker.md) (infraestrutura rodando)
+> Este serviço usa o banco `pagamentosdb` na porta `5433` e roda na porta `8081`.
 
-## Imagens Docker
+## O que essa spec faz
 
-| Serviço    | Imagem                    | Versão  |
-|------------|---------------------------|---------|
-| PostgreSQL | `postgres`                | `16`    |
-| Kafka      | `confluentinc/cp-kafka`   | `7.6.0` |
-| Zookeeper  | `confluentinc/cp-zookeeper` | `7.6.0` |
-
-> Infraestrutura completa em [spec001](spec001-infraestrutura-docker.md).  
-> Este serviço usa o banco `pagamentosdb` na porta `5433`.
-
----
-
-## Objetivo
-
-Criar a entidade `Pagamento`, o enum de status e a migration Flyway do **Pagamentos Service** (microsserviço independente, porta 8081).
+Cria a entidade `Pagamento`, o enum de status e a migration Flyway do **pagamentos-service**.
 
 ---
 
@@ -39,35 +27,31 @@ pagamentos-service/src/main/
 
 ---
 
-## Implementação
-
-### StatusPagamento.java (enum)
+## StatusPagamento.java (enum)
 
 ```java
 public enum StatusPagamento {
-    PENDENTE,    // aguardando resposta do gateway
-    APROVADO,    // gateway confirmou
-    RECUSADO,    // gateway recusou (limite, dados inválidos, etc.)
-    ESTORNADO    // pagamento revertido após aprovação
+    PENDENTE,   // aguardando resposta do gateway
+    APROVADO,   // gateway confirmou
+    RECUSADO,   // gateway recusou
+    ESTORNADO   // pagamento revertido após aprovação
 }
 ```
 
 ---
 
-### Pagamento.java
+## Pagamento.java
 
 ```java
 @Entity
 @Table(name = "pagamentos")
 public class Pagamento {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // referência lógica ao Hotel Core — sem FK cross-service
     @Column(nullable = false, unique = true)
-    private Long reservaId;
+    private Long reservaId; // referência lógica — sem FK cross-service
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal valor;
@@ -84,27 +68,22 @@ public class Pagamento {
     private LocalDateTime atualizadoEm;
 
     @PreUpdate
-    void preUpdate() {
-        this.atualizadoEm = LocalDateTime.now();
-    }
+    void preUpdate() { this.atualizadoEm = LocalDateTime.now(); }
 
     // getters e setters
 }
 ```
 
-> **Nota sobre `reservaId`:** este campo é apenas uma referência lógica.
-> Não há FK para o banco do Hotel Core — os serviços são desacoplados.
-> O vínculo entre domínios acontece via eventos Kafka.
+> `reservaId` é só uma referência lógica — não existe FK apontando para o banco do hotel-core. O vínculo entre os serviços acontece via eventos Kafka.
 
 ---
 
-### PagamentoRepository.java
+## PagamentoRepository.java
 
 ```java
 public interface PagamentoRepository extends JpaRepository<Pagamento, Long> {
 
-    // usado para idempotência: evita processar a mesma reserva duas vezes
-    boolean existsByReservaId(Long reservaId);
+    boolean existsByReservaId(Long reservaId); // usado para idempotência
 
     Optional<Pagamento> findByReservaId(Long reservaId);
 }
@@ -112,16 +91,16 @@ public interface PagamentoRepository extends JpaRepository<Pagamento, Long> {
 
 ---
 
-### V1__create_pagamentos.sql (Flyway migration)
+## V1__create_pagamentos.sql
 
 ```sql
 CREATE TABLE pagamentos (
     id            BIGSERIAL PRIMARY KEY,
-    reserva_id    BIGINT         NOT NULL UNIQUE,
-    valor         NUMERIC(10,2)  NOT NULL,
-    status        VARCHAR(20)    NOT NULL DEFAULT 'PENDENTE',
+    reserva_id    BIGINT        NOT NULL UNIQUE,
+    valor         NUMERIC(10,2) NOT NULL,
+    status        VARCHAR(20)   NOT NULL DEFAULT 'PENDENTE',
     motivo        TEXT,
-    criado_em     TIMESTAMP      NOT NULL DEFAULT NOW(),
+    criado_em     TIMESTAMP     NOT NULL DEFAULT NOW(),
     atualizado_em TIMESTAMP
 );
 
@@ -130,7 +109,7 @@ CREATE INDEX idx_pagamentos_reserva_id ON pagamentos(reserva_id);
 
 ---
 
-### application.yml (Pagamentos Service)
+## application.yml (Pagamentos Service)
 
 ```yaml
 spring:

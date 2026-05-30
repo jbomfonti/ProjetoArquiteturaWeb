@@ -1,25 +1,10 @@
 # SPEC-002 — Hotel Core: Models e Banco de Dados
 
----
+> Depende de: [spec001](spec001-infraestrutura-docker.md) (infraestrutura rodando)
 
-## Imagens Docker
+## O que essa spec faz
 
-| Serviço    | Imagem           | Versão  |
-|------------|------------------|---------|
-| PostgreSQL | `postgres`       | `16`    |
-| Kafka      | `confluentinc/cp-kafka` | `7.6.0` |
-
-> Infraestrutura completa em [spec001](spec001-infraestrutura-docker.md).
-
----
-
-## Objetivo
-
-Criar as entidades JPA e a migration Flyway do **Hotel Core**:
-
-- `Hospede` — dados do hóspede
-- `Imovel` — propriedade/quarto disponível
-- `Reserva` — reserva com controle de status e lock otimista
+Cria as 3 entidades JPA e a migration SQL do **hotel-core**.
 
 ---
 
@@ -37,17 +22,14 @@ hotel-core/src/main/
 
 ---
 
-## Implementação
-
-### Hospede.java
+## Hospede.java
 
 ```java
 @Entity
 @Table(name = "hospedes")
 public class Hospede {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
@@ -68,15 +50,14 @@ public class Hospede {
 
 ---
 
-### Imovel.java
+## Imovel.java
 
 ```java
 @Entity
 @Table(name = "imoveis")
 public class Imovel {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
@@ -100,15 +81,14 @@ public class Imovel {
 
 ---
 
-### Reserva.java
+## Reserva.java
 
 ```java
 @Entity
 @Table(name = "reservas")
 public class Reserva {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -136,7 +116,7 @@ public class Reserva {
     private StatusReserva status = StatusReserva.PENDENTE;
 
     @Version
-    private Long version; // lock otimista — evita overbooking
+    private Long version; // previne overbooking em requisições simultâneas
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm = LocalDateTime.now();
@@ -144,9 +124,7 @@ public class Reserva {
     private LocalDateTime atualizadoEm;
 
     @PreUpdate
-    void preUpdate() {
-        this.atualizadoEm = LocalDateTime.now();
-    }
+    void preUpdate() { this.atualizadoEm = LocalDateTime.now(); }
 
     // getters e setters
 }
@@ -154,57 +132,57 @@ public class Reserva {
 
 ---
 
-### StatusReserva.java (enum)
+## StatusReserva.java (enum)
 
 ```java
 public enum StatusReserva {
-    PENDENTE,    // aguardando confirmação do pagamento
-    CONFIRMADA,  // pagamento aprovado
-    CANCELADA,   // pagamento recusado, estornado ou cancelamento manual
-    CONCLUIDA    // hóspede realizou check-out
+    PENDENTE,   // aguardando pagamento
+    CONFIRMADA, // pagamento aprovado
+    CANCELADA,  // pagamento recusado ou cancelamento manual
+    CONCLUIDA   // hóspede fez check-out
 }
 ```
 
 ---
 
-### V1__create_tables.sql (Flyway migration)
+## V1__create_tables.sql
 
 ```sql
 CREATE TABLE hospedes (
-    id        BIGSERIAL PRIMARY KEY,
-    nome      VARCHAR(255) NOT NULL,
-    email     VARCHAR(255) NOT NULL UNIQUE,
-    telefone  VARCHAR(20)  NOT NULL,
-    cpf       VARCHAR(14)  NOT NULL UNIQUE
+    id       BIGSERIAL PRIMARY KEY,
+    nome     VARCHAR(255) NOT NULL,
+    email    VARCHAR(255) NOT NULL UNIQUE,
+    telefone VARCHAR(20)  NOT NULL,
+    cpf      VARCHAR(14)  NOT NULL UNIQUE
 );
 
 CREATE TABLE imoveis (
-    id               BIGSERIAL PRIMARY KEY,
-    nome             VARCHAR(255)   NOT NULL,
-    descricao        TEXT           NOT NULL,
-    capacidade       INT            NOT NULL,
-    preco_por_noite  NUMERIC(10,2)  NOT NULL,
-    disponivel       BOOLEAN        NOT NULL DEFAULT TRUE
+    id              BIGSERIAL PRIMARY KEY,
+    nome            VARCHAR(255)  NOT NULL,
+    descricao       TEXT          NOT NULL,
+    capacidade      INT           NOT NULL,
+    preco_por_noite NUMERIC(10,2) NOT NULL,
+    disponivel      BOOLEAN       NOT NULL DEFAULT TRUE
 );
 
 CREATE TABLE reservas (
-    id               BIGSERIAL PRIMARY KEY,
-    hospede_id       BIGINT         NOT NULL REFERENCES hospedes(id),
-    imovel_id        BIGINT         NOT NULL REFERENCES imoveis(id),
-    data_check_in    DATE           NOT NULL,
-    data_check_out   DATE           NOT NULL,
-    numero_hospedes  INT            NOT NULL,
-    valor_total      NUMERIC(10,2)  NOT NULL,
-    status           VARCHAR(20)    NOT NULL DEFAULT 'PENDENTE',
-    version          BIGINT         NOT NULL DEFAULT 0,
-    criado_em        TIMESTAMP      NOT NULL DEFAULT NOW(),
-    atualizado_em    TIMESTAMP
+    id              BIGSERIAL PRIMARY KEY,
+    hospede_id      BIGINT        NOT NULL REFERENCES hospedes(id),
+    imovel_id       BIGINT        NOT NULL REFERENCES imoveis(id),
+    data_check_in   DATE          NOT NULL,
+    data_check_out  DATE          NOT NULL,
+    numero_hospedes INT           NOT NULL,
+    valor_total     NUMERIC(10,2) NOT NULL,
+    status          VARCHAR(20)   NOT NULL DEFAULT 'PENDENTE',
+    version         BIGINT        NOT NULL DEFAULT 0,
+    criado_em       TIMESTAMP     NOT NULL DEFAULT NOW(),
+    atualizado_em   TIMESTAMP
 );
 ```
 
 ---
 
-### application.yml (Hotel Core)
+## application.yml (Hotel Core)
 
 ```yaml
 spring:
@@ -230,7 +208,6 @@ server:
 
 - `valorTotal` = `precoPorNoite × número de noites`
 - Número de noites = `dataCheckOut - dataCheckIn` (em dias)
-- `@Version` em `Reserva` previne overbooking em requisições simultâneas
 
 ---
 

@@ -1,22 +1,10 @@
 # SPEC-005 — Hotel Core: Kafka Producer
 
----
+> Depende de: [spec003](spec003-hotelcore-endpoints.md) (ReservaService) e [spec004](spec004-hotelcore-kafka-config.md) (KafkaConfig)
 
-## Imagens Docker
+## O que essa spec faz
 
-| Serviço    | Imagem                    | Versão  |
-|------------|---------------------------|---------|
-| PostgreSQL | `postgres`                | `16`    |
-| Kafka      | `confluentinc/cp-kafka`   | `7.6.0` |
-| Zookeeper  | `confluentinc/cp-zookeeper` | `7.6.0` |
-
-> Infraestrutura completa em [spec001](spec001-infraestrutura-docker.md).
-
----
-
-## Objetivo
-
-Implementar o **producer Kafka** do Hotel Core que publica no tópico `reserva.criada` toda vez que uma nova reserva é salva com status `PENDENTE`.
+Publica um evento no tópico `reserva.criada` toda vez que uma reserva é criada com status `PENDENTE`.
 
 ---
 
@@ -31,9 +19,7 @@ hotel-core/src/main/java/com/hotel/core/
 
 ---
 
-## Implementação
-
-### ReservaProducer.java
+## ReservaProducer.java
 
 ```java
 @Component
@@ -60,10 +46,7 @@ public class ReservaProducer {
             reserva.getValorTotal()
         );
 
-        // chave = reservaId garante ordem na mesma partição
-        String chave = reserva.getId().toString();
-
-        kafkaTemplate.send(topico, chave, evento)
+        kafkaTemplate.send(topico, reserva.getId().toString(), evento)
             .whenComplete((result, ex) -> {
                 if (ex != null) {
                     log.error("Falha ao publicar reserva.criada reservaId={}", reserva.getId(), ex);
@@ -79,30 +62,20 @@ public class ReservaProducer {
 }
 ```
 
----
-
-## Por que usar `reservaId` como chave?
-
-A chave de partição determina em qual partição a mensagem cai.  
-Usando `reservaId.toString()` como chave:
-
-- Todos os eventos de uma mesma reserva sempre vão para a **mesma partição**
-- A **ordem de processamento** é preservada por reserva
-- Evita condições de corrida entre `reserva.criada` e `pagamento.resultado` da mesma reserva
+> **Por que usar `reservaId` como chave?**
+> Garante que todos os eventos de uma mesma reserva vão para a mesma partição, preservando a ordem de processamento.
 
 ---
 
-## Fluxo após publicação
+## Fluxo
 
 ```
 ReservaService.criarReserva()
-        │
-        ├── reservaRepository.save(reserva)   ← salva com PENDENTE
-        │
-        └── reservaProducer.publicar(reserva) ── publica ──► reserva.criada
-                                                                     │
-                                                              [Pagamentos Service consome]
-                                                              [ver spec008]
+    │
+    ├── reservaRepository.save(reserva)    → salva com PENDENTE
+    └── reservaProducer.publicar(reserva)  → publica em reserva.criada
+                                                     │
+                                           [Pagamentos Service consome — spec008]
 ```
 
 ---

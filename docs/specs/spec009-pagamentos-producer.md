@@ -1,22 +1,10 @@
 # SPEC-009 — Pagamentos Service: Kafka Producer
 
----
+> Depende de: [spec008](spec008-pagamentos-consumer-gateway.md) (PagamentoService)
 
-## Imagens Docker
+## O que essa spec faz
 
-| Serviço    | Imagem                    | Versão  |
-|------------|---------------------------|---------|
-| PostgreSQL | `postgres`                | `16`    |
-| Kafka      | `confluentinc/cp-kafka`   | `7.6.0` |
-| Zookeeper  | `confluentinc/cp-zookeeper` | `7.6.0` |
-
-> Infraestrutura completa em [spec001](spec001-infraestrutura-docker.md).
-
----
-
-## Objetivo
-
-Implementar o **producer Kafka** do Pagamentos Service que publica o resultado do pagamento no tópico `pagamento.resultado` após processar a transação com o gateway.
+Publica o resultado do pagamento no tópico `pagamento.resultado` após processar a transação com o gateway.
 
 ---
 
@@ -24,32 +12,13 @@ Implementar o **producer Kafka** do Pagamentos Service que publica o resultado d
 
 ```
 pagamentos-service/src/main/java/com/hotel/pagamentos/
-├── kafka/
-│   └── producer/
-│       └── PagamentoResultadoProducer.java
-└── event/
-    └── PagamentoResultadoEvent.java
+└── kafka/producer/
+    └── PagamentoResultadoProducer.java
 ```
 
 ---
 
-## Implementação
-
-### PagamentoResultadoEvent.java (cópia local)
-
-```java
-// O Pagamentos Service mantém sua própria cópia — sem JAR compartilhado
-public record PagamentoResultadoEvent(
-    Long reservaId,
-    Long pagamentoId,
-    String status,   // APROVADO | RECUSADO | ESTORNADO
-    String motivo
-) {}
-```
-
----
-
-### PagamentoResultadoProducer.java
+## PagamentoResultadoProducer.java
 
 ```java
 @Component
@@ -74,10 +43,7 @@ public class PagamentoResultadoProducer {
             pagamento.getMotivo()
         );
 
-        // mesma chave do producer do Hotel Core — garante ordem por reserva
-        String chave = pagamento.getReservaId().toString();
-
-        kafkaTemplate.send(topico, chave, evento)
+        kafkaTemplate.send(topico, pagamento.getReservaId().toString(), evento)
             .whenComplete((result, ex) -> {
                 if (ex != null) {
                     log.error("Falha ao publicar pagamento.resultado reservaId={}", pagamento.getReservaId(), ex);
@@ -96,7 +62,7 @@ public class PagamentoResultadoProducer {
 
 ---
 
-### KafkaConfig.java (Pagamentos Service)
+## KafkaConfig.java (Pagamentos Service)
 
 ```java
 @Configuration
@@ -139,16 +105,12 @@ public class KafkaConfig {
         ConsumerFactory<String, ReservaCriadaEvent> consumerFactory,
         KafkaTemplate<String, Object> kafkaTemplate
     ) {
-        ConcurrentKafkaListenerContainerFactory<String, ReservaCriadaEvent> factory =
-            new ConcurrentKafkaListenerContainerFactory<>();
+        var factory = new ConcurrentKafkaListenerContainerFactory<String, ReservaCriadaEvent>();
         factory.setConsumerFactory(consumerFactory);
-
-        DefaultErrorHandler errorHandler = new DefaultErrorHandler(
+        factory.setCommonErrorHandler(new DefaultErrorHandler(
             new DeadLetterPublishingRecoverer(kafkaTemplate),
             new FixedBackOff(2000L, 3L)
-        );
-        factory.setCommonErrorHandler(errorHandler);
-
+        ));
         return factory;
     }
 
@@ -161,24 +123,24 @@ public class KafkaConfig {
 
 ---
 
-## Visão geral do fluxo completo
+## Fluxo completo do sistema
 
 ```
-Hotel Core (8080)                  Kafka                   Pagamentos Service (8081)
-─────────────────                  ─────                   ─────────────────────────
+hotel-core (8080)                   Kafka                pagamentos-service (8081)
+─────────────────                   ─────                ─────────────────────────
 POST /api/reservas
         │
    Salva PENDENTE
         │
-   ReservaProducer ──► reserva.criada ──────────────────► ReservaCriadaConsumer
-                                                                    │
-                                                           PagamentoService.processar()
-                                                                    │
-                                                           GatewayPagamento (mock)
-                                                                    │
-                                                        PagamentoResultadoProducer
-                                                                    │
-PagamentoResultadoConsumer ◄── pagamento.resultado ◄────────────────┘
+   ReservaProducer ──► reserva.criada ──────────────► ReservaCriadaConsumer
+                                                               │
+                                                      PagamentoService.processar()
+                                                               │
+                                                      MockGatewayPagamento
+                                                               │
+                                                   PagamentoResultadoProducer
+                                                               │
+PagamentoResultadoConsumer ◄── pagamento.resultado ◄───────────┘
         │
 Atualiza Reserva
 → CONFIRMADA / CANCELADA
@@ -186,4 +148,4 @@ Atualiza Reserva
 
 ---
 
-**Próxima spec:** [spec010 — Testes (após endpoints)](spec010-testes.md)
+**Próxima spec:** [spec010 — Testes](spec010-testes.md)
