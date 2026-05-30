@@ -9,9 +9,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
 @Entity
+@Table(name = "hospedes")
 public class Hospede {
 
     @Id
@@ -19,15 +22,24 @@ public class Hospede {
     private Long id;
 
     @NotBlank
+
+    @Column(nullable = false)
     private String nome;
 
-    @Column(unique = true, nullable = false)
-    private String cpf;
+    @NotBlank
 
+    @Email
     @Column(unique = true, nullable = false)
     private String email;
 
+    @NotBlank
+
+    @Column(nullable = false)
     private String telefone;
+
+    @NotBlank
+    @Column(unique = true, nullable = false)
+    private String cpf;
 
     private LocalDate dataNascimento;
 
@@ -91,9 +103,4 @@ public class Hospede {
         return dataCadastro;
     }
 
-    public void setDataCadastro(LocalDateTime dataCadastro) {
-        this.dataCadastro = dataCadastro;
-    }
-
-    
 }

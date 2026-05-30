@@ -164,7 +164,6 @@ package com.sistema.gestao.sistemagestao.controller;
 import com.sistema.gestao.sistemagestao.dto.AtualizarHospedeRequest;
 import com.sistema.gestao.sistemagestao.dto.CriarHospedeRequest;
 import com.sistema.gestao.sistemagestao.dto.HospedeResponse;
-import com.sistema.gestao.sistemagestao.service.HospedeService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
@@ -201,7 +200,7 @@ public class HospedeController {
 
     @PutMapping("/{id}")
     public HospedeResponse atualizar(@PathVariable Long id,
-                                      @RequestBody @Valid AtualizarHospedeRequest request) {
+                                     @RequestBody @Valid AtualizarHospedeRequest request) {
         return hospedeService.atualizar(id, request);
     }
 

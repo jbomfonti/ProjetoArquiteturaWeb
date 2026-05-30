@@ -1,58 +1,52 @@
 package com.sistema.gestao.sistemagestao.controller;
 
-import org.springframework.web.bind.annotation.RestController;
-
-import com.sistema.gestao.sistemagestao.model.Hospede;
+import com.sistema.gestao.sistemagestao.dto.AtualizarHospedeRequest;
+import com.sistema.gestao.sistemagestao.dto.CriarHospedeRequest;
+import com.sistema.gestao.sistemagestao.dto.HospedeResponse;
 import com.sistema.gestao.sistemagestao.service.HospedeService;
-
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-
-
-
 @RestController
-@RequestMapping("/hospedes")
+@RequestMapping("/api/hospedes")
+@Validated
 public class HospedeController {
 
-    @Autowired
-    private HospedeService service;
+    private final HospedeService hospedeService;
+
+    public HospedeController(HospedeService hospedeService) {
+        this.hospedeService = hospedeService;
+    }
 
     @PostMapping
-    public ResponseEntity<Hospede> criar(@RequestBody Hospede hospede) {
-        return ResponseEntity.ok(service.criar(hospede));
+    @ResponseStatus(HttpStatus.CREATED)
+    public HospedeResponse criar(@RequestBody @Valid CriarHospedeRequest request) {
+        return hospedeService.criar(request);
     }
 
     @GetMapping
-    public ResponseEntity<List<Hospede>> listar() {
-        return ResponseEntity.ok(service.listar());
+    public List<HospedeResponse> listar() {
+        return hospedeService.listar();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Hospede> buscar(@PathVariable Long id) {
-        return ResponseEntity.ok(service.buscarPorId(id));
+    public HospedeResponse buscar(@PathVariable Long id) {
+        return hospedeService.buscarPorId(id);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Hospede> atualizar(
-            @PathVariable Long id,
-            @RequestBody Hospede hospede) {
-
-        return ResponseEntity.ok(service.atualizar(id, hospede));
+    public HospedeResponse atualizar(@PathVariable Long id,
+                                     @RequestBody @Valid AtualizarHospedeRequest request) {
+        return hospedeService.atualizar(id, request);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletar(@PathVariable Long id) {
-        service.deletar(id);
-        return ResponseEntity.noContent().build();
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletar(@PathVariable Long id) {
+        hospedeService.deletar(id);
     }
 }
