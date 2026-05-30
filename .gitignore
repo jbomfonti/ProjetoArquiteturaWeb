@@ -20,7 +20,7 @@ target/
 *.ipr
 
 .claude
-
+teste
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
