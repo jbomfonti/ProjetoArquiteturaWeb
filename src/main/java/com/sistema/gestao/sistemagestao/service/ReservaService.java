@@ -1,6 +1,7 @@
 package com.sistema.gestao.sistemagestao.service;
 
 import com.sistema.gestao.sistemagestao.dto.*;
+import com.sistema.gestao.sistemagestao.kafka.producer.ReservaProducer;
 import com.sistema.gestao.sistemagestao.model.*;
 import com.sistema.gestao.sistemagestao.repository.*;
 import jakarta.persistence.EntityNotFoundException;
@@ -18,13 +19,16 @@ public class ReservaService {
     private final ReservaRepository reservaRepository;
     private final HospedeRepository hospedeRepository;
     private final ImovelRepository imovelRepository;
+    private final ReservaProducer reservaProducer;
 
     public ReservaService(ReservaRepository reservaRepository,
                           HospedeRepository hospedeRepository,
-                          ImovelRepository imovelRepository) {
+                          ImovelRepository imovelRepository,
+                          ReservaProducer reservaProducer) {
         this.reservaRepository = reservaRepository;
         this.hospedeRepository = hospedeRepository;
         this.imovelRepository = imovelRepository;
+        this.reservaProducer = reservaProducer;
     }
 
     public ReservaResponse criar(CriarReservaRequest request) {
@@ -55,7 +59,9 @@ public class ReservaService {
         reserva.setNumeroHospedes(request.numeroHospedes());
         reserva.setValorTotal(valorTotal);
 
-        return toResponse(reservaRepository.save(reserva));
+        Reserva salva = reservaRepository.save(reserva);
+        reservaProducer.publicar(salva);
+        return toResponse(salva);
     }
 
     @Transactional(readOnly = true)
