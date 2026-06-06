@@ -103,4 +103,7 @@ public class Hospede {
         return dataCadastro;
     }
 
+    public void setDataCadastro(LocalDateTime dataCadastro){
+        this.dataCadastro = dataCadastro;
+    }
 }
