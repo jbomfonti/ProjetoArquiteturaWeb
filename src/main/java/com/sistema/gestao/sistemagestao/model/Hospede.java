@@ -103,7 +103,10 @@ public class Hospede {
         return dataCadastro;
     }
 
+<<<<<<< HEAD
     public void setDataCadastro(LocalDateTime dataCadastro){
         this.dataCadastro = dataCadastro;
     }
+=======
+>>>>>>> 01b8b43 (Testes Imoveis)
 }
