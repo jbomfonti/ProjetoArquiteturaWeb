@@ -1,4 +1,4 @@
-/*package com.sistema.gestao.sistemagestao.controller;
+package com.sistema.gestao.sistemagestao.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -246,4 +246,4 @@ class ReservaControllerTest {
             assertTrue(ex.getCause().getMessage().contains("Reserva não encontrada"));
         }
     }
-}  */
+}  

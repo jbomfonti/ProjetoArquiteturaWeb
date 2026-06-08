@@ -22,18 +22,15 @@ public class Hospede {
     private Long id;
 
     @NotBlank
-
     @Column(nullable = false)
     private String nome;
 
     @NotBlank
-
     @Email
     @Column(unique = true, nullable = false)
     private String email;
 
     @NotBlank
-
     @Column(nullable = false)
     private String telefone;
 
@@ -51,62 +48,23 @@ public class Hospede {
         this.dataCadastro = LocalDateTime.now();
     }
 
-    public Long getId() {
-        return id;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
 
-    public String getNome() {
-        return nome;
-    }
+    public String getCpf() { return cpf; }
+    public void setCpf(String cpf) { this.cpf = cpf; }
 
-    public void setNome(String nome) {
-        this.nome = nome;
-    }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 
-    public String getCpf() {
-        return cpf;
-    }
+    public String getTelefone() { return telefone; }
+    public void setTelefone(String telefone) { this.telefone = telefone; }
 
-    public void setCpf(String cpf) {
-        this.cpf = cpf;
-    }
+    public LocalDate getDataNascimento() { return dataNascimento; }
+    public void setDataNascimento(LocalDate dataNascimento) { this.dataNascimento = dataNascimento; }
 
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getTelefone() {
-        return telefone;
-    }
-
-    public void setTelefone(String telefone) {
-        this.telefone = telefone;
-    }
-
-    public LocalDate getDataNascimento() {
-        return dataNascimento;
-    }
-
-    public void setDataNascimento(LocalDate dataNascimento) {
-        this.dataNascimento = dataNascimento;
-    }
-
-    public LocalDateTime getDataCadastro() {
-        return dataCadastro;
-    }
-
-<<<<<<< HEAD
-    public void setDataCadastro(LocalDateTime dataCadastro){
-        this.dataCadastro = dataCadastro;
-    }
-=======
->>>>>>> 01b8b43 (Testes Imoveis)
+    public LocalDateTime getDataCadastro() { return dataCadastro; }
 }

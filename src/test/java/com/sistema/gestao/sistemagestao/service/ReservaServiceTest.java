@@ -1,4 +1,4 @@
-/*package com.sistema.gestao.sistemagestao.service;
+package com.sistema.gestao.sistemagestao.service;
 
 import com.sistema.gestao.sistemagestao.dto.*;
 import com.sistema.gestao.sistemagestao.kafka.producer.ReservaProducer;
@@ -320,4 +320,4 @@ class ReservaServiceTest {
             throw new RuntimeException(e);
         }
     }
-}*/
+}

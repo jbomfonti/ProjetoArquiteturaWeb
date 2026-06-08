@@ -15,7 +15,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,7 +45,6 @@ public class HospedeServiceTest {
         hospede.setTelefone("31911111111");
         hospede.setCpf("123.456.789-00");
         hospede.setDataNascimento(LocalDate.of(1999,6,2));
-        hospede.setDataCadastro(LocalDateTime.now());
 
         criarRequest = new CriarHospedeRequest(
                 "Maria Silva",
@@ -133,7 +131,6 @@ public class HospedeServiceTest {
         hospedeAtualizado.setEmail("maria.novo@gmail.com");
         hospedeAtualizado.setTelefone("31999999999");
         hospedeAtualizado.setDataNascimento(LocalDate.of(2000,3,14));
-        hospedeAtualizado.setDataCadastro(LocalDateTime.now());
 
         when(hospedeRepository.findById(1L)).thenReturn(Optional.of(hospede));
         when(hospedeRepository.existsByEmail("maria.novo@gmail.com")).thenReturn(false);
